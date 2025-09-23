@@ -1,0 +1,38 @@
+# V language build outputs
+*.exe
+*.dll
+*.dylib
+*.so
+*.out
+*.o
+
+# V cache and generated artifacts
+.vmodules/
+.vlang/
+*.c
+*.tmp
+
+# IDE/editor files
+.vscode/
+.idea/
+*.iml
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+
+# Backup / temp files
+*~
+*.swp
+*.bak
+
+# Project-specific
+/tests/output/
