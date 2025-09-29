@@ -34,6 +34,13 @@ pub fn new_lexer(input string) Lexer {
 
 pub fn (mut l Lexer) eof() bool { return l.i >= l.input.len }
 
+fn (l &Lexer) get_next_char() string {
+	if l.i + 1 < l.input.len {
+		return l.input[l.i + 1..l.i + 2]
+	}
+	return ''
+}
+
 fn is_space(c u8) bool { return c == ` ` || c == `\t` || c == `\n` || c == `\r` }
 
 fn is_xletter(c u8) bool { return c >= `A` && c <= `E` }
@@ -68,33 +75,47 @@ pub fn (mut l Lexer) lex_all() ([]Token, []string) {
 			match wlow {
 				'hi' {
 					tokens << Token{ kind: .hi, lit: word, pos: word_start }
+					l.i = word_end
 				}
 				'bye' {
 					tokens << Token{ kind: .bye, lit: word, pos: word_start }
+					l.i = word_end
 				}
 				'bar' {
 					tokens << Token{ kind: .bar, lit: word, pos: word_start }
+					l.i = word_end
 				}
 				'line' {
 					tokens << Token{ kind: .line, lit: word, pos: word_start }
+					l.i = word_end
 				}
 				'fill' {
 					tokens << Token{ kind: .fill, lit: word, pos: word_start }
+					l.i = word_end
 				}
 				else {
 					// If it's a single letter and uppercase A-E -> X token
 					if word.len == 1 && is_xletter(word[0]) {
 						tokens << Token{ kind: .xletter, lit: word, pos: word_start }
+						l.i = word_end
 					} else if word.len == 1 && (word[0] >= `A` && word[0] <= `Z`) {
 						// Single uppercase letter but not in valid X range (A-E)
-						errors << "variable '${word}' not valid - X variables must be A, B, C, D, or E"
+						// Always report invalid X variable, with context if followed by digit
+						next_char := l.get_next_char()
+						if next_char.len > 0 && (next_char[0] >= `0` && next_char[0] <= `9`) {
+							errors << "${word}${next_char} contains an error - variable '${word}' is not valid"
+						} else {
+							errors << "${word} contains an error - variable '${word}' should be A-E and followed by a digit 1-5"
+						}
+						l.i = word_end
 					} else {
 						// Unknown identifier/action
 						errors << "action '${word}' not valid"
+						l.i = word_end
 					}
 				}
 			}
-			l.i = word_end
+			// l.i is already set appropriately in each branch above
 			continue
 		}
 
@@ -118,7 +139,18 @@ pub fn (mut l Lexer) lex_all() ([]Token, []string) {
 
 		// Other characters (digits outside 1-5, punctuation, etc.)
 		if c >= `0` && c <= `9` {
-			// collect run of digits for better error messages
+			// Handle invalid Y digits (outside 1-5 range)
+			if c >= `6` && c <= `9` {
+				// Check if preceded by any letter (valid or invalid X variable)
+				if l.i > 0 && ((l.input[l.i-1] >= `A` && l.input[l.i-1] <= `Z`) || (l.input[l.i-1] >= `a` && l.input[l.i-1] <= `z`)) {
+					errors << "${l.input[l.i-1..l.i+1]} contains an error - value '${l.input[l.i..l.i+1]}' is not valid"
+				} else {
+					errors << "${l.input[l.i..l.i+1]} contains an error - value '${l.input[l.i..l.i+1]}' is not valid"
+				}
+				l.i++
+				continue
+			}
+			// collect run of digits for other cases
 			dstart := l.i
 			mut dend := l.i+1
 			for dend < l.input.len && (l.input[dend] >= `0` && l.input[dend] <= `9`) {
@@ -131,7 +163,7 @@ pub fn (mut l Lexer) lex_all() ([]Token, []string) {
 		}
 
 		// Any other symbol
-		errors << "${l.input[l.i..l.i+1]} contains an error – symbol '${l.input[l.i..l.i+1]}' not valid"
+		errors << "${l.input[l.i..l.i+1]} contains an error - symbol '${l.input[l.i..l.i+1]}' not valid"
 		l.i++
 	}
 	tokens << Token{ kind: .eof, lit: '', pos: l.input.len }
