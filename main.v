@@ -3,23 +3,43 @@ module main
 import os
 import src
 
-// Entry point: displays grammar, prompts for input, runs derivation and shows parse tree
+/**
+ * V Language Recognizer - Main Entry Point
+ * 
+ * This program implements a language recognizer for a simple drawing command grammar.
+ * It performs lexical analysis, parsing, and generates leftmost derivations with parse trees.
+ * 
+ * Grammar structure:
+ * - <graph>   → HI <draw> BYE
+ * - <draw>    → <action> | <action> ; <draw>
+ * - <action>  → bar <x><y>,<y> | line <x><y>,<x><y> | fill <x><y>
+ * - <x>       → A | B | C | D | E
+ * - <y>       → 1 | 2 | 3 | 4 | 5
+ */
 fn main() {
+	// Main program loop - continues until user types 'END'
 	for {
-		// Clear screen if supported: skipping to maximize portability
+		// Display the grammar rules for user reference
 		print_grammar()
+		
+		// Get user input and normalize by trimming whitespace
 		input_str := os.input('Enter a string to recognize (or type END to quit): ').trim_space()
+		
+		// Check for exit condition (case-insensitive)
 		if input_str.to_upper() == 'END' {
 			println('\nGoodbye!\n')
 			return
 		}
 
-		// Lex + Parse + Derivation
-	mut lexer := src.new_lexer(input_str)
-	tokens, lex_err := lexer.lex_all()
+		// PHASE 1: LEXICAL ANALYSIS
+		// Create lexer instance and tokenize the input string
+		mut lexer := src.new_lexer(input_str)
+		tokens, lex_err := lexer.lex_all()
+		
+		// Handle lexical errors (invalid tokens, unrecognized symbols, etc.)
 		if lex_err.len > 0 {
-			// Report first lexical error (display all lines below if multiple)
 			println('\nDerivation unsuccessful (lexical error):')
+			// Display all lexical errors found during tokenization
 			for e in lex_err {
 				println('Error: ' + e)
 			}
@@ -27,10 +47,15 @@ fn main() {
 			continue
 		}
 
-	mut parser := src.new_parser(tokens)
-	root, derivation, perr := parser.parse_graph_with_derivation()
+		// PHASE 2: SYNTAX ANALYSIS & DERIVATION GENERATION
+		// Create parser with tokenized input and attempt to parse according to grammar
+		mut parser := src.new_parser(tokens)
+		root, derivation, perr := parser.parse_graph_with_derivation()
+		
+		// Handle syntax errors (grammar violations, unexpected tokens, etc.)
 		if perr.len > 0 {
 			println('\nDerivation unsuccessful (syntax error):')
+			// Display all parsing errors encountered
 			for e in perr {
 				println('Error: ' + e)
 			}
@@ -38,26 +63,34 @@ fn main() {
 			continue
 		}
 
-		// Success: show derivation steps and the final generated sentence
+		// PHASE 3: SUCCESS - DISPLAY RESULTS
+		// Show the leftmost derivation steps that led to acceptance
 		println('\nLEFTMOST DERIVATION:')
 		formatted_derivation := src.format_derivation(derivation)
 		for s in formatted_derivation {
 			println(s)
 		}
-		// Final sentence
-	final_sentence := src.tokens_to_sentence(tokens)
+		
+		// Reconstruct and display the final sentence from tokens
+		final_sentence := src.tokens_to_sentence(tokens)
 		println('\nFinal generated sentence: ' + final_sentence)
 		println('\nThe string is ACCEPTED by the grammar.')
 		_ = os.input('\nPress Enter to show the parse tree...')
 
-		// Draw parse tree
+		// PHASE 4: PARSE TREE VISUALIZATION
+		// Display the hierarchical structure of the parsed input
 		println('\nPARSE TREE:')
-	println(src.render_tree(root))
+		println(src.render_tree(root))
 		_ = os.input('\nPress Enter to continue...')
 	}
 }
 
-// Prints the grammar in BNF form
+/**
+ * Display the grammar rules in Backus-Naur Form (BNF)
+ * 
+ * Shows the formal grammar definition and provides examples of valid strings.
+ * This helps users understand what input formats are acceptable.
+ */
 fn print_grammar() {
 	println('\nLANGUAGE RECOGNIZER — Grammar (BNF)')
 	println('------------------------------------')
