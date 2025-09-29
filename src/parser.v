@@ -25,6 +25,25 @@ fn (mut p Parser) at_end() bool { return p.i >= p.tokens.len }
 fn (mut p Parser) peek() Token { return p.tokens[p.i] }
 fn (mut p Parser) advance() Token { t := p.tokens[p.i]; p.i++; return t }
 
+// Format derivation steps with numbering and arrows
+pub fn format_derivation(steps []string) []string {
+	mut formatted := []string{}
+	for i, step in steps {
+		if i == 0 {
+			// First step with step number
+			formatted << '01 ${step}\t→ ${steps[1]}'
+		} else if i == 1 {
+			// Skip - already handled in step 0
+			continue
+		} else {
+			// Format subsequent steps with proper numbering
+			num := if i < 10 { '0${i}' } else { '${i}' }
+			formatted << '${num}\t\t→ ${step}'
+		}
+	}
+	return formatted
+}
+
 // Tokens to sentence (for final output)
 pub fn tokens_to_sentence(tokens []Token) string {
 	mut s := ''
@@ -53,12 +72,13 @@ pub fn tokens_to_sentence(tokens []Token) string {
 	return s.trim_space()
 }
 
-// Parse with derivation steps
+// Parse with detailed leftmost derivation
 pub fn (mut p Parser) parse_graph_with_derivation() (&TreeNode, []string, []string) {
 	p.steps = []string{}
-	// Initial sentential form
 	p.steps << '<graph>'
-	// <graph> → HI <draw> BYE
+	p.steps << 'HI <draw> BYE'
+	
+	// Build parse tree
 	mut root := new_node('graph')
 	mut hi_node := new_node('HI')
 	mut draw_node := new_node('draw')
@@ -66,15 +86,18 @@ pub fn (mut p Parser) parse_graph_with_derivation() (&TreeNode, []string, []stri
 	root.add_child(hi_node)
 	root.add_child(draw_node)
 	root.add_child(bye_node)
-	p.steps << 'HI <draw> BYE'
 
 	// expect HI
 	if !p.match_kind(.hi) {
 		return root, p.steps, ['Expected HI at the beginning']
 	}
 
-	// parse <draw>
-	_, derrs := p.parse_draw(mut draw_node)
+	// Generate dynamic leftmost derivation based on actual input
+	p.generate_dynamic_leftmost_derivation()
+
+	// Reset position and parse for tree
+	p.i = 1
+	_, derrs := p.parse_draw_for_tree(mut draw_node)
 	if derrs.len > 0 {
 		return root, p.steps, derrs
 	}
@@ -84,13 +107,163 @@ pub fn (mut p Parser) parse_graph_with_derivation() (&TreeNode, []string, []stri
 		return root, p.steps, ['Expected BYE at the end']
 	}
 
-	// Ensure EOF or trailing spaces only
 	if p.peek().kind != .eof {
-		// collect unexpected token literal
 		t := p.peek()
 		return root, p.steps, ['Unexpected token ' + t.lit + ' after BYE']
 	}
 	return root, p.steps, []string{}
+}
+
+fn (mut p Parser) generate_dynamic_leftmost_derivation() {
+	// Parse the input to generate actions dynamically
+	mut actions := p.extract_actions()
+	
+	mut current_sentence := 'HI '
+	mut remaining_actions := actions.len
+	
+	for i, action in actions {
+		is_last_action := (i == actions.len - 1)
+		
+		// Step: <draw> → <action> ; <draw> or <draw> → <action>
+		if is_last_action {
+			p.steps << current_sentence + '<action> BYE'
+		} else {
+			if remaining_actions > 1 {
+				p.steps << current_sentence + '<action> ; <draw> BYE'
+			}
+		}
+		
+		// Generate steps for this specific action
+		current_sentence = p.generate_action_steps(action, current_sentence, is_last_action)
+		
+		if !is_last_action {
+			// After completing an action, show the sentence with ; <draw>
+			p.steps << current_sentence + ' ; <draw> BYE'
+			current_sentence += '; '
+		}
+		
+		remaining_actions--
+	}
+	
+	// Final step
+	p.steps << current_sentence + ' BYE'
+}
+
+// Extract actions from the token stream
+fn (p &Parser) extract_actions() []ActionInfo {
+	mut actions := []ActionInfo{}
+	mut i := 1 // Start after HI
+	
+	for i < p.tokens.len {
+		if p.tokens[i].kind == .bye || p.tokens[i].kind == .eof {
+			break
+		}
+		
+		if p.tokens[i].kind in [.bar, .line, .fill] {
+			action_type := p.tokens[i].kind
+			mut params := []string{}
+			i++ // move past action keyword
+			
+			// Collect parameters based on action type
+			match action_type {
+				.bar {
+					// bar <x><y>,<y> = 4 tokens: x, y, comma, y
+					if i + 3 < p.tokens.len {
+						params << p.tokens[i].lit     // x
+						params << p.tokens[i + 1].lit // y
+						params << p.tokens[i + 3].lit // y after comma
+						i += 4
+					}
+				}
+				.line {
+					// line <x><y>,<x><y> = 5 tokens: x, y, comma, x, y
+					if i + 4 < p.tokens.len {
+						params << p.tokens[i].lit     // x1
+						params << p.tokens[i + 1].lit // y1
+						params << p.tokens[i + 3].lit // x2
+						params << p.tokens[i + 4].lit // y2
+						i += 5
+					}
+				}
+				.fill {
+					// fill <x><y> = 2 tokens: x, y
+					if i + 1 < p.tokens.len {
+						params << p.tokens[i].lit     // x
+						params << p.tokens[i + 1].lit // y
+						i += 2
+					}
+				}
+				else {}
+			}
+			
+			actions << ActionInfo{
+				action_type: action_type
+				params: params
+			}
+		}
+		
+		// Skip semicolon
+		if i < p.tokens.len && p.tokens[i].kind == .semicol {
+			i++
+		}
+	}
+	
+	return actions
+}
+
+struct ActionInfo {
+	action_type TokenKind
+	params      []string
+}
+
+fn (mut p Parser) generate_action_steps(action ActionInfo, current_sentence string, is_last bool) string {
+	suffix := if is_last { ' BYE' } else { ' ; <draw> BYE' }
+	mut result := current_sentence
+	
+	match action.action_type {
+		.bar {
+			// <action> → bar <x><y>,<y>
+			p.steps << result + 'bar <x><y>,<y>' + suffix
+			
+			// <x> → specific letter
+			p.steps << result + 'bar ${action.params[0]}<y>,<y>' + suffix
+			
+			// <y> → specific digit
+			p.steps << result + 'bar ${action.params[0]}${action.params[1]},<y>' + suffix
+			
+			// <y> → specific digit
+			result += 'bar ${action.params[0]}${action.params[1]},${action.params[2]}'
+		}
+		.line {
+			// <action> → line <x><y>,<x><y>
+			p.steps << result + 'line <x><y>,<x><y>' + suffix
+			
+			// <x> → specific letter
+			p.steps << result + 'line ${action.params[0]}<y>,<x><y>' + suffix
+			
+			// <y> → specific digit
+			p.steps << result + 'line ${action.params[0]}${action.params[1]},<x><y>' + suffix
+			
+			// <x> → specific letter
+			p.steps << result + 'line ${action.params[0]}${action.params[1]},${action.params[2]}<y>' + suffix
+			
+			// <y> → specific digit
+			result += 'line ${action.params[0]}${action.params[1]},${action.params[2]}${action.params[3]}'
+		}
+		.fill {
+			// <action> → fill <x><y>
+			p.steps << result + 'fill <x><y>' + suffix
+			
+			// <x> → specific letter
+			p.steps << result + 'fill ${action.params[0]}<y>' + suffix
+			
+			// <y> → specific digit
+			result += 'fill ${action.params[0]}${action.params[1]}'
+		}
+		else {}
+	}
+	
+	return result
 }
 
 fn (mut p Parser) match_kind(k TokenKind) bool {
@@ -98,73 +271,44 @@ fn (mut p Parser) match_kind(k TokenKind) bool {
 	return false
 }
 
-// <draw> → <action> | <action> ; <draw>
-fn (mut p Parser) parse_draw(mut node TreeNode) (bool, []string) {
-	// Replace <draw> by a sequence of <action> separated by ';'
-	mut list_node := new_node('draw_list')
-	node.add_child(list_node)
-
-	// Before parsing first action, show expansion to <action>
-	p.steps << 'HI <action> BYE'
+// Simple parse for tree construction
+fn (mut p Parser) parse_draw_for_tree(mut node TreeNode) (bool, []string) {
 	for {
 		mut act_node := new_node('action')
-		list_node.add_child(act_node)
-		_, errs := p.parse_action(mut act_node)
+		node.add_child(act_node)
+		_, errs := p.parse_action_for_tree(mut act_node)
 		if errs.len > 0 { return false, errs }
 
-		// After parsing an action, if next token is ';', show derivation with remaining <draw>
 		if p.peek().kind == .semicol {
-			// Show: HI <parsed_so_far> ; <draw> BYE
-			left := p.since_hi()
-			p.steps << 'HI ' + left + ' ; <draw> BYE'
-			// consume ';'
 			_ = p.match_kind(.semicol)
 			mut semi_node := new_node(';')
-			list_node.add_child(semi_node)
+			node.add_child(semi_node)
 			continue
 		}
 		break
 	}
-	// No more actions; show: HI <parsed_so_far> BYE
-	p.steps << 'HI ' + p.since_hi() + ' BYE'
 	return true, []string{}
 }
 
-// <action> → bar <x><y>,<y>
-//          | line <x><y>,<x><y>
-//          | fill <x><y>
-fn (mut p Parser) parse_action(mut node TreeNode) (bool, []string) {
+fn (mut p Parser) parse_action_for_tree(mut node TreeNode) (bool, []string) {
 	t := p.peek()
 	match t.kind {
 		.bar {
 			p.advance()
 			node.add_child(new_node('bar'))
-			// <x>
-			x1 := p.consume_x() or {
-				return false, [p.err_expected_x()]
-			}
+			x1 := p.consume_x() or { return false, [p.err_expected_x()] }
 			node.add_child(new_node(x1))
-			// <y>
-			y1 := p.consume_y() or {
-				return false, [p.err_expected_y()]
-			}
+			y1 := p.consume_y() or { return false, [p.err_expected_y()] }
 			node.add_child(new_node(y1))
-			// ,
-			if !p.match_kind(.comma) {
-				return false, ["Expected ',' after ${x1}${y1}"]
-			}
+			if !p.match_kind(.comma) { return false, ["Expected ',' after ${x1}${y1}"] }
 			node.add_child(new_node(','))
-			// <y>
-			y2 := p.consume_y() or {
-				return false, [p.err_expected_y()]
-			}
+			y2 := p.consume_y() or { return false, [p.err_expected_y()] }
 			node.add_child(new_node(y2))
 			return true, []string{}
 		}
 		.line {
 			p.advance()
 			node.add_child(new_node('line'))
-			// <x><y>
 			x1 := p.consume_x() or { return false, [p.err_expected_x()] }
 			node.add_child(new_node(x1))
 			y1 := p.consume_y() or { return false, [p.err_expected_y()] }
@@ -218,30 +362,5 @@ fn (mut p Parser) err_expected_y() string {
 	t := p.peek()
 	if t.kind == .xletter { return t.lit + " contains an error – variable '" + t.lit + "' is not valid" }
 	if t.kind == .eof { return 'Unexpected end of input – expected Y digit (1-5)' }
-	// If digit but not 1-5 would be caught by lexer, but include generic
 	return t.lit + ' contains the unrecognized value ' + t.lit
 }
-
-// Utility to show derivation progress based on consumed tokens
-fn (p &Parser) since_hi() string {
-	// Build sentence from tokens consumed so far AFTER 'HI' and before BYE
-	mut s := ''
-	mut prev := TokenKind.eof
-	for j in 0 .. p.i {
-		if j == 0 { continue } // skip HI position
-		t := p.tokens[j]
-		if t.kind == .eof || t.kind == .bye { break }
-		match t.kind {
-			.comma { s += ',' }
-			.semicol { s += ';'; s += ' ' }
-			else {
-				// add space except when joining X+Y
-				if s.len > 0 && prev !in [.comma, .semicol] && !(prev == .xletter && t.kind == .ydigit) { s += ' ' }
-				s += t.lit
-			}
-		}
-		prev = t.kind
-	}
-	return s.trim_space()
-}
-

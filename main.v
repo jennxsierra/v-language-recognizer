@@ -40,7 +40,8 @@ fn main() {
 
 		// Success: show derivation steps and the final generated sentence
 		println('\nLEFTMOST DERIVATION:')
-		for s in derivation {
+		formatted_derivation := src.format_derivation(derivation)
+		for s in formatted_derivation {
 			println(s)
 		}
 		// Final sentence

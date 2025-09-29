@@ -85,6 +85,9 @@ pub fn (mut l Lexer) lex_all() ([]Token, []string) {
 					// If it's a single letter and uppercase A-E -> X token
 					if word.len == 1 && is_xletter(word[0]) {
 						tokens << Token{ kind: .xletter, lit: word, pos: word_start }
+					} else if word.len == 1 && (word[0] >= `A` && word[0] <= `Z`) {
+						// Single uppercase letter but not in valid X range (A-E)
+						errors << "variable '${word}' not valid - X variables must be A, B, C, D, or E"
 					} else {
 						// Unknown identifier/action
 						errors << "action '${word}' not valid"
