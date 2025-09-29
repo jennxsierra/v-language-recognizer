@@ -10,7 +10,7 @@ fn main() {
 		print_grammar()
 		input_str := os.input('Enter a string to recognize (or type END to quit): ').trim_space()
 		if input_str.to_upper() == 'END' {
-			println('\nGoodbye!')
+			println('\nGoodbye!\n')
 			return
 		}
 
@@ -57,7 +57,7 @@ fn main() {
 	}
 }
 
-// Prints the grammar in BNF-like form
+// Prints the grammar in BNF form
 fn print_grammar() {
 	println('LANGUAGE RECOGNIZER — Grammar (BNF)')
 	println('------------------------------------')
@@ -65,8 +65,7 @@ fn print_grammar() {
 	println('<draw>   → <action> | <action> ; <draw>')
 	println('<action> → bar <x><y>,<y> | line <x><y>,<x><y> | fill <x><y>')
 	println('<x>      → A | B | C | D | E')
-	println('<y>      → 1 | 2 | 3 | 4 | 5')
-	println('')
+	println('<y>      → 1 | 2 | 3 | 4 | 5\n')
 	println('Examples of accepted strings:')
-	println('  HI bar D2,5; fill A2; line B4,D2 BYE')
+	println('  HI bar D2,5; fill A2; line B4,D2 BYE\n')
 }
