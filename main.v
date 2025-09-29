@@ -59,13 +59,16 @@ fn main() {
 
 // Prints the grammar in BNF form
 fn print_grammar() {
-	println('LANGUAGE RECOGNIZER — Grammar (BNF)')
+	println('\nLANGUAGE RECOGNIZER — Grammar (BNF)')
 	println('------------------------------------')
-	println('<graph>  → HI <draw> BYE')
-	println('<draw>   → <action> | <action> ; <draw>')
-	println('<action> → bar <x><y>,<y> | line <x><y>,<x><y> | fill <x><y>')
-	println('<x>      → A | B | C | D | E')
-	println('<y>      → 1 | 2 | 3 | 4 | 5\n')
+	println('<graph>   →    HI <draw> BYE')
+	println('<draw>    →    <action>')
+	println('             | <action> ; <draw>')
+	println('<action>  →    bar <x><y>,<y>')
+	println('             | line <x><y>,<x><y>')
+	println('             | fill <x><y>')
+	println('<x>       →    A | B | C | D | E')
+	println('<y>       →    1 | 2 | 3 | 4 | 5\n')
 	println('Examples of accepted strings:')
 	println('  HI bar D2,5; fill A2; line B4,D2 BYE\n')
 }

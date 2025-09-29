@@ -79,9 +79,9 @@ pub fn (mut p Parser) parse_graph_with_derivation() (&TreeNode, []string, []stri
 	p.steps << 'HI <draw> BYE'
 	
 	// Build parse tree
-	mut root := new_node('graph')
+	mut root := new_node('<graph>')
 	mut hi_node := new_node('HI')
-	mut draw_node := new_node('draw')
+	mut draw_node := new_node('<draw>')
 	mut bye_node := new_node('BYE')
 	root.add_child(hi_node)
 	root.add_child(draw_node)
@@ -274,7 +274,7 @@ fn (mut p Parser) match_kind(k TokenKind) bool {
 // Simple parse for tree construction
 fn (mut p Parser) parse_draw_for_tree(mut node TreeNode) (bool, []string) {
 	for {
-		mut act_node := new_node('action')
+		mut act_node := new_node('<action>')
 		node.add_child(act_node)
 		_, errs := p.parse_action_for_tree(mut act_node)
 		if errs.len > 0 { return false, errs }
@@ -297,37 +297,55 @@ fn (mut p Parser) parse_action_for_tree(mut node TreeNode) (bool, []string) {
 			p.advance()
 			node.add_child(new_node('bar'))
 			x1 := p.consume_x() or { return false, [p.err_expected_x()] }
-			node.add_child(new_node(x1))
+			mut x_node := new_node('<x>')
+			x_node.add_child(new_node(x1))
+			node.add_child(x_node)
 			y1 := p.consume_y() or { return false, [p.err_expected_y()] }
-			node.add_child(new_node(y1))
+			mut y1_node := new_node('<y>')
+			y1_node.add_child(new_node(y1))
+			node.add_child(y1_node)
 			if !p.match_kind(.comma) { return false, ["Expected ',' after ${x1}${y1}"] }
 			node.add_child(new_node(','))
 			y2 := p.consume_y() or { return false, [p.err_expected_y()] }
-			node.add_child(new_node(y2))
+			mut y2_node := new_node('<y>')
+			y2_node.add_child(new_node(y2))
+			node.add_child(y2_node)
 			return true, []string{}
 		}
 		.line {
 			p.advance()
 			node.add_child(new_node('line'))
 			x1 := p.consume_x() or { return false, [p.err_expected_x()] }
-			node.add_child(new_node(x1))
+			mut x1_node := new_node('<x>')
+			x1_node.add_child(new_node(x1))
+			node.add_child(x1_node)
 			y1 := p.consume_y() or { return false, [p.err_expected_y()] }
-			node.add_child(new_node(y1))
+			mut y1_node := new_node('<y>')
+			y1_node.add_child(new_node(y1))
+			node.add_child(y1_node)
 			if !p.match_kind(.comma) { return false, ["Expected ',' after ${x1}${y1}"] }
 			node.add_child(new_node(','))
 			x2 := p.consume_x() or { return false, [p.err_expected_x()] }
-			node.add_child(new_node(x2))
+			mut x2_node := new_node('<x>')
+			x2_node.add_child(new_node(x2))
+			node.add_child(x2_node)
 			y2 := p.consume_y() or { return false, [p.err_expected_y()] }
-			node.add_child(new_node(y2))
+			mut y2_node := new_node('<y>')
+			y2_node.add_child(new_node(y2))
+			node.add_child(y2_node)
 			return true, []string{}
 		}
 		.fill {
 			p.advance()
 			node.add_child(new_node('fill'))
 			x1 := p.consume_x() or { return false, [p.err_expected_x()] }
-			node.add_child(new_node(x1))
+			mut x_node := new_node('<x>')
+			x_node.add_child(new_node(x1))
+			node.add_child(x_node)
 			y1 := p.consume_y() or { return false, [p.err_expected_y()] }
-			node.add_child(new_node(y1))
+			mut y_node := new_node('<y>')
+			y_node.add_child(new_node(y1))
+			node.add_child(y_node)
 			return true, []string{}
 		}
 		else {
