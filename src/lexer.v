@@ -4,8 +4,7 @@ module src
  * 
  * This module implements tokenization for the drawing command language
  * It converts raw input strings into a sequence of tokens that can be parsed
- * 
- * The lexer handles:
+ *  The lexer handles:
  * - Keywords (HI, BYE, bar, line, fill)
  * - Variables (A-E for X coordinates, 1-5 for Y coordinates)
  * - Punctuation (comma, semicolon)
@@ -17,9 +16,9 @@ module src
 pub enum TokenKind {
 	hi      // Start keyword "HI"
 	bye     // End keyword "BYE"
-	bar     // Action keyword "bar" - draws a vertical bar
-	line    // Action keyword "line" - draws a line between two points
-	fill    // Action keyword "fill" - fills a position
+	bar     // Action keyword "bar"
+	line    // Action keyword "line"
+	fill    // Action keyword "fill"
 	xletter // X coordinate variables: A, B, C, D, E
 	ydigit  // Y coordinate values: 1, 2, 3, 4, 5
 	comma   // Separator "," between coordinates
@@ -71,11 +70,25 @@ fn (l &Lexer) get_next_char() string {
 /* Check if character is whitespace (space, tab, newline, carriage return) */
 fn is_space(c u8) bool { return c == ` ` || c == `\t` || c == `\n` || c == `\r` }
 
-/* Check if character is a valid X coordinate variable (A-E) */
-fn is_xletter(c u8) bool { return c >= `A` && c <= `E` }
+/* Check if character is a valid X coordinate variable (A-E, case insensitive) */
+fn is_xletter(c u8) bool { 
+	// Normalize to uppercase for consistent checking
+	ch_upper := if c >= `a` && c <= `z` { c - 32 } else { c }
+	return ch_upper >= `A` && ch_upper <= `E`
+}
 
 /* Check if character is a valid Y coordinate digit (1-5) */
 fn is_ydigit(c u8) bool { return c >= `1` && c <= `5` }
+
+/* Error Information Structure
+ * 
+ * Stores detailed information about lexical errors for intelligent grouping */
+struct ErrorInfo {
+	pos int           // Position in input string
+	error_type string // Type of error ('invalid_y', 'invalid_x', 'unrecognized', etc.)
+	value string      // The problematic value
+	context string    // Surrounding context
+}
 
 /* Main tokenization function
  * 
@@ -90,6 +103,7 @@ fn is_ydigit(c u8) bool { return c >= `1` && c <= `5` }
 pub fn (mut l Lexer) lex_all() ([]Token, []string) {
 	mut tokens := []Token{}   // Accumulator for valid tokens
 	mut errors := []string{}  // Accumulator for error messages
+	mut raw_errors := []ErrorInfo{}  // Detailed error information for grouping
 	
 	// Main tokenization loop - process each character
 	for !l.eof() {
@@ -111,7 +125,9 @@ pub fn (mut l Lexer) lex_all() ([]Token, []string) {
 			// Read the complete word (sequence of letters)
 			for !l.eof() {
 				ch := l.input[word_end]
-				if (ch >= `A` && ch <= `Z`) || (ch >= `a` && ch <= `z`) {
+				// Normalize to uppercase for consistent checking
+				ch_upper := if ch >= `a` && ch <= `z` { ch - 32 } else { ch }
+				if ch_upper >= `A` && ch_upper <= `Z` {
 					word_end++
 				} else {
 					break  // Stop at first non-letter
@@ -124,11 +140,13 @@ pub fn (mut l Lexer) lex_all() ([]Token, []string) {
 			// Match against known keywords (case-insensitive)
 			match wlow {
 				'hi' {   // Program start marker
-					tokens << Token{ kind: .hi, lit: word, pos: word_start }
+					// Normalize to uppercase for consistent display
+					tokens << Token{ kind: .hi, lit: 'HI', pos: word_start }
 					l.i = word_end
 				}
 				'bye' {  // Program end marker
-					tokens << Token{ kind: .bye, lit: word, pos: word_start }
+					// Normalize to uppercase for consistent display
+					tokens << Token{ kind: .bye, lit: 'BYE', pos: word_start }
 					l.i = word_end
 				}
 				'bar' {  // Draw vertical bar action
@@ -144,25 +162,47 @@ pub fn (mut l Lexer) lex_all() ([]Token, []string) {
 					l.i = word_end
 				}
 				else {   // Not a keyword - check if it's a valid variable or error
-					// Check if it's a valid X coordinate variable (single letter A-E)
+					// Check if it's a valid X coordinate variable (single letter A-E, case insensitive)
 					if word.len == 1 && is_xletter(word[0]) {
-						tokens << Token{ kind: .xletter, lit: word, pos: word_start }
+						// Normalize to uppercase for consistent storage
+						normalized_lit := word.to_upper()
+						tokens << Token{ kind: .xletter, lit: normalized_lit, pos: word_start }
 						l.i = word_end
-					} else if word.len == 1 && (word[0] >= `A` && word[0] <= `Z`) {
-						// Single uppercase letter but outside valid X range (not A-E)
-						// Provide context-aware error messages
-						next_char := l.get_next_char()
-						if next_char.len > 0 && (next_char[0] >= `0` && next_char[0] <= `9`) {
-							// Invalid variable followed by digit (e.g., "F3")
-							errors << "${word}${next_char} contains an error - variable '${word}' is not valid"
-						} else {
-							// Invalid variable not followed by digit
-							errors << "${word} contains an error - variable '${word}' should be A-E and followed by a digit 1-5"
+					} else if word.len == 1 {
+						// Normalize character for checking
+						ch := word[0]
+						ch_upper := if ch >= `a` && ch <= `z` { ch - 32 } else { ch }
+						if ch_upper >= `A` && ch_upper <= `Z` {
+							// Single letter but outside valid X range (not A-E)
+							// Provide context-aware error messages
+							next_char := l.get_next_char()
+							if next_char.len > 0 && (next_char[0] >= `0` && next_char[0] <= `9`) {
+								// Invalid variable followed by digit (e.g., "F3" or "f3")
+								raw_errors << ErrorInfo{
+									pos: word_start
+									error_type: 'invalid_x_with_digit'
+									value: word.to_upper()
+									context: "${word}${next_char}"
+								}
+							} else {
+								// Invalid variable not followed by digit
+								raw_errors << ErrorInfo{
+									pos: word_start
+									error_type: 'invalid_x_standalone'
+									value: word.to_upper()
+									context: word
+								}
+							}
 						}
 						l.i = word_end
 					} else {
 						// Multi-character word that's not a keyword = invalid action
-						errors << "action '${word}' not valid"
+						raw_errors << ErrorInfo{
+							pos: word_start
+							error_type: 'invalid_action'
+							value: word
+							context: word
+						}
 						l.i = word_end
 					}
 				}
@@ -198,13 +238,23 @@ pub fn (mut l Lexer) lex_all() ([]Token, []string) {
 		if c >= `0` && c <= `9` {
 			// Digits 6-9 are invalid Y coordinates
 			if c >= `6` && c <= `9` {
-				// Provide context-aware error messages
+				// Collect detailed error information for intelligent grouping
 				if l.i > 0 && ((l.input[l.i-1] >= `A` && l.input[l.i-1] <= `Z`) || (l.input[l.i-1] >= `a` && l.input[l.i-1] <= `z`)) {
 					// Invalid digit following a letter (e.g., "A7")
-					errors << "${l.input[l.i-1..l.i+1]} contains an error - value '${l.input[l.i..l.i+1]}' is not valid"
+					raw_errors << ErrorInfo{
+						pos: l.i - 1
+						error_type: 'invalid_y_after_x'
+						value: l.input[l.i..l.i+1]
+						context: l.input[l.i-1..l.i+1]
+					}
 				} else {
 					// Standalone invalid digit
-					errors << "${l.input[l.i..l.i+1]} contains an error - value '${l.input[l.i..l.i+1]}' is not valid"
+					raw_errors << ErrorInfo{
+						pos: l.i
+						error_type: 'invalid_y_standalone'
+						value: l.input[l.i..l.i+1]
+						context: l.input[l.i..l.i+1]
+					}
 				}
 				l.i++
 				continue
@@ -218,19 +268,129 @@ pub fn (mut l Lexer) lex_all() ([]Token, []string) {
 				dend++
 			}
 			val := l.input[dstart..dend]
-			errors << "${val} contains the unrecognized value ${val}"
+			raw_errors << ErrorInfo{
+				pos: dstart
+				error_type: 'unrecognized_value'
+				value: val
+				context: val
+			}
 			l.i = dend
 			continue
 		}
 
 		// UNRECOGNIZED SYMBOLS
 		// Any character that doesn't fit the grammar
-		errors << "${l.input[l.i..l.i+1]} contains an error - symbol '${l.input[l.i..l.i+1]}' not valid"
+		raw_errors << ErrorInfo{
+			pos: l.i
+			error_type: 'unrecognized_symbol'
+			value: l.input[l.i..l.i+1]
+			context: l.input[l.i..l.i+1]
+		}
 		l.i++
 	}
 	
 	// Add end-of-file marker to complete the token stream
 	tokens << Token{ kind: .eof, lit: '', pos: l.input.len }
+	
+	// Process raw errors to group related coordinate errors
+	errors = l.process_errors(raw_errors)
+	
 	return tokens, errors
+}
+
+/* Process raw errors to group related coordinate errors
+ * 
+ * This function analyzes the collected error information and groups
+ * related Y-coordinate errors in coordinate sequences (e.g., "d9,8") */
+fn (l &Lexer) process_errors(raw_errors []ErrorInfo) []string {
+	mut processed := []string{}
+	mut i := 0
+	
+	for i < raw_errors.len {
+		error := raw_errors[i]
+		
+		// Check if this is an invalid Y coordinate that might be part of a sequence
+		if error.error_type in ['invalid_y_after_x', 'invalid_y_standalone'] {
+			// Look ahead to see if there are more Y coordinate errors in a sequence
+			mut grouped_errors := [error]
+			mut j := i + 1
+			
+			// Collect consecutive Y coordinate errors that form a sequence
+			for j < raw_errors.len {
+				next_error := raw_errors[j]
+				
+				// Check if next error is also an invalid Y and part of the same coordinate sequence
+				if next_error.error_type in ['invalid_y_after_x', 'invalid_y_standalone'] {
+					// Simple heuristic: if positions are close together (within 3 characters)
+					// they're likely part of the same coordinate sequence
+					if next_error.pos - grouped_errors.last().pos <= 3 {
+						grouped_errors << next_error
+						j++
+					} else {
+						break
+					}
+				} else {
+					break
+				}
+			}
+			
+			// Generate appropriate error message
+			if grouped_errors.len > 1 {
+				// Multiple Y coordinate errors - group them
+				mut invalid_values := []string{}
+				mut start_pos := grouped_errors[0].pos
+				mut end_pos := grouped_errors.last().pos + grouped_errors.last().value.len
+				
+				for err in grouped_errors {
+					invalid_values << "'${err.value}'"
+				}
+				
+				context := l.input[start_pos..end_pos]
+				values_str := if invalid_values.len == 2 {
+					'${invalid_values[0]} and ${invalid_values[1]}'
+				} else {
+					invalid_values[..invalid_values.len-1].join(', ') + ' and ' + invalid_values.last()
+				}
+				
+				processed << "${context} contains an error - <y> values ${values_str} are not valid"
+				i = j  // Skip all processed errors
+			} else {
+				// Single Y coordinate error - use individual message
+				err := grouped_errors[0]
+				if err.error_type == 'invalid_y_after_x' {
+					processed << "${err.context} contains an error - value '${err.value}' is not valid"
+				} else {
+					processed << "${err.context} contains an error - value '${err.value}' is not valid"
+				}
+				i++
+			}
+		} else {
+			// Handle other error types individually
+			match error.error_type {
+				'invalid_x_with_digit' {
+					processed << "${error.context} contains an error - variable '${error.value}' is not valid"
+				}
+				'invalid_x_standalone' {
+					processed << "${error.context} contains an error - variable '${error.value}' should be A-E and followed by a digit 1-5"
+				}
+				'invalid_action' {
+					processed << "action '${error.value}' not valid"
+				}
+				'unrecognized_value' {
+					processed << "${error.value} is an unrecognized value"
+				}
+				'unrecognized_symbol' {
+					processed << "${error.context} contains an error - symbol '${error.value}' not valid"
+				}
+				else {
+					// Fallback for unknown error types
+					processed << "${error.context} contains an error"
+				}
+			}
+			i++
+		}
+	}
+	
+	return processed
 }
 

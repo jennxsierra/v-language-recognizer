@@ -24,7 +24,6 @@ pub struct ParseResult {
 }
 
 /* Recursive Descent Parser
- * 
  * Maintains parsing state and generates both parse trees and derivation sequences
  * Uses lookahead to make parsing decisions and provides detailed error reporting */
 pub struct Parser {
@@ -170,7 +169,6 @@ pub fn (mut p Parser) parse_graph_with_derivation() (&TreeNode, []string, []stri
 }
 
 /* Generate dynamic leftmost derivation based on actual input
- * 
  * This function creates derivation steps that correspond exactly to the input,
  * showing how the grammar produces the specific sequence of actions
  * The derivation follows leftmost derivation rules (always expand leftmost non-terminal) */
@@ -213,7 +211,6 @@ fn (mut p Parser) generate_dynamic_leftmost_derivation() {
 }
 
 /* Extract action information from token stream
- * 
  * Scans through tokens to identify action commands and their parameters
  * This information is used to generate accurate derivation steps that
  * correspond to the input structure */
@@ -244,6 +241,11 @@ fn (p &Parser) extract_actions() []ActionInfo {
 						params << p.tokens[i + 1].lit // y coordinate (1-5)
 						params << p.tokens[i + 3].lit // second y coordinate (after comma)
 						i += 4  // Skip past all consumed tokens
+					} else {
+						// Incomplete bar action - advance past what we have to prevent infinite loop
+						for i < p.tokens.len && p.tokens[i].kind !in [.bye, .eof, .semicol] {
+							i++
+						}
 					}
 				}
 				.line {
@@ -255,6 +257,11 @@ fn (p &Parser) extract_actions() []ActionInfo {
 						params << p.tokens[i + 3].lit // end x coordinate (after comma)
 						params << p.tokens[i + 4].lit // end y coordinate
 						i += 5  // Skip past all consumed tokens
+					} else {
+						// Incomplete line action - advance past what we have to prevent infinite loop
+						for i < p.tokens.len && p.tokens[i].kind !in [.bye, .eof, .semicol] {
+							i++
+						}
 					}
 				}
 				.fill {
@@ -264,6 +271,11 @@ fn (p &Parser) extract_actions() []ActionInfo {
 						params << p.tokens[i].lit     // x coordinate
 						params << p.tokens[i + 1].lit // y coordinate
 						i += 2  // Skip past consumed tokens
+					} else {
+						// Incomplete fill action - advance past what we have to prevent infinite loop
+						for i < p.tokens.len && p.tokens[i].kind !in [.bye, .eof, .semicol] {
+							i++
+						}
 					}
 				}
 				else {} // No parameters for unknown action types
@@ -286,7 +298,6 @@ fn (p &Parser) extract_actions() []ActionInfo {
 }
 
 /* Action Information Container
- * 
  * Stores the type of action and its associated parameters
  * Used to generate derivation steps that match the specific input */
 struct ActionInfo {
@@ -295,7 +306,6 @@ struct ActionInfo {
 }
 
 /* Generate derivation steps for a specific action
- * 
  * Creates the sequence of derivation steps that shows how an <action>
  * non-terminal is expanded into the specific action with its parameters */
 fn (mut p Parser) generate_action_steps(action ActionInfo, current_sentence string, is_last bool) string {
@@ -306,43 +316,52 @@ fn (mut p Parser) generate_action_steps(action ActionInfo, current_sentence stri
 	// Generate derivation steps specific to each action type
 	match action.action_type {
 		.bar {
-			// Step 1: <action> → bar <x><y>,<y>
-			p.steps << result + 'bar <x><y>,<y>' + suffix
-			
-			// Step 2: <x> → specific letter (e.g., A, B, C, D, or E)
-			p.steps << result + 'bar ${action.params[0]}<y>,<y>' + suffix
-			
-			// Step 3: First <y> → specific digit (1-5)
-			p.steps << result + 'bar ${action.params[0]}${action.params[1]},<y>' + suffix
-			
-			// Step 4: Second <y> → specific digit (1-5)
-			result += 'bar ${action.params[0]}${action.params[1]},${action.params[2]}'
+			// Only generate derivation steps if we have complete parameters
+			if action.params.len >= 3 {
+				// Step 1: <action> → bar <x><y>,<y>
+				p.steps << result + 'bar <x><y>,<y>' + suffix
+				
+				// Step 2: <x> → specific letter (e.g., A, B, C, D, or E)
+				p.steps << result + 'bar ${action.params[0]}<y>,<y>' + suffix
+				
+				// Step 3: First <y> → specific digit (1-5)
+				p.steps << result + 'bar ${action.params[0]}${action.params[1]},<y>' + suffix
+				
+				// Step 4: Second <y> → specific digit (1-5)
+				result += 'bar ${action.params[0]}${action.params[1]},${action.params[2]}'
+			}
 		}
 		.line {
-			// Step 1: <action> → line <x><y>,<x><y>
-			p.steps << result + 'line <x><y>,<x><y>' + suffix
-			
-			// Step 2: First <x> → specific letter (start point x-coordinate)
-			p.steps << result + 'line ${action.params[0]}<y>,<x><y>' + suffix
-			
-			// Step 3: First <y> → specific digit (start point y-coordinate)
-			p.steps << result + 'line ${action.params[0]}${action.params[1]},<x><y>' + suffix
-			
-			// Step 4: Second <x> → specific letter (end point x-coordinate)
-			p.steps << result + 'line ${action.params[0]}${action.params[1]},${action.params[2]}<y>' + suffix
-			
-			// Step 5: Second <y> → specific digit (end point y-coordinate)
-			result += 'line ${action.params[0]}${action.params[1]},${action.params[2]}${action.params[3]}'
+			// Only generate derivation steps if we have complete parameters
+			if action.params.len >= 4 {
+				// Step 1: <action> → line <x><y>,<x><y>
+				p.steps << result + 'line <x><y>,<x><y>' + suffix
+				
+				// Step 2: First <x> → specific letter (start point x-coordinate)
+				p.steps << result + 'line ${action.params[0]}<y>,<x><y>' + suffix
+				
+				// Step 3: First <y> → specific digit (start point y-coordinate)
+				p.steps << result + 'line ${action.params[0]}${action.params[1]},<x><y>' + suffix
+				
+				// Step 4: Second <x> → specific letter (end point x-coordinate)
+				p.steps << result + 'line ${action.params[0]}${action.params[1]},${action.params[2]}<y>' + suffix
+				
+				// Step 5: Second <y> → specific digit (end point y-coordinate)
+				result += 'line ${action.params[0]}${action.params[1]},${action.params[2]}${action.params[3]}'
+			}
 		}
 		.fill {
-			// Step 1: <action> → fill <x><y>
-			p.steps << result + 'fill <x><y>' + suffix
-			
-			// Step 2: <x> → specific letter (fill point x-coordinate)
-			p.steps << result + 'fill ${action.params[0]}<y>' + suffix
-			
-			// Step 3: <y> → specific digit (fill point y-coordinate)
-			result += 'fill ${action.params[0]}${action.params[1]}'
+			// Only generate derivation steps if we have complete parameters
+			if action.params.len >= 2 {
+				// Step 1: <action> → fill <x><y>
+				p.steps << result + 'fill <x><y>' + suffix
+				
+				// Step 2: <x> → specific letter (fill point x-coordinate)
+				p.steps << result + 'fill ${action.params[0]}<y>' + suffix
+				
+				// Step 3: <y> → specific digit (fill point y-coordinate)
+				result += 'fill ${action.params[0]}${action.params[1]}'
+			}
 		}
 		else {} // Unknown action type - no derivation steps
 	}
@@ -367,25 +386,27 @@ fn (mut p Parser) match_kind(k TokenKind) bool {
  * This function builds the tree structure while the derivation
  * generation handles the step-by-step transformation display */
 fn (mut p Parser) parse_draw_for_tree(mut node TreeNode) (bool, []string) {
-	// Parse sequence of actions separated by semicolons
-	for {
-		// Create and parse an <action> node
-		mut act_node := new_node('<action>')
-		node.add_child(act_node)
-		_, errs := p.parse_action_for_tree(mut act_node)
-		if errs.len > 0 { return false, errs }
+    // Parse the first <action>
+    mut act_node := new_node('<action>')
+    node.add_child(act_node)
+    _, errs := p.parse_action_for_tree(mut act_node)
+    if errs.len > 0 { return false, errs }
 
-		// Check for semicolon separator (indicates more actions follow)
-		if p.peek().kind == .semicol {
-			_ = p.match_kind(.semicol)  // Consume the semicolon
-			mut semi_node := new_node(';')  // Add semicolon to tree
-			node.add_child(semi_node)
-			continue  // Parse next action
-		}
-		break  // No more actions
-	}
-	return true, []string{}  // Success
+    // If we see ';', then <draw> → <action> ; <draw>
+    if p.peek().kind == .semicol {
+        _ = p.match_kind(.semicol)
+        node.add_child(new_node(';'))
+
+        // Create the recursive <draw> child and keep parsing into it
+        mut next_draw := new_node('<draw>')
+        node.add_child(next_draw)
+        return p.parse_draw_for_tree(mut next_draw)
+    }
+
+    // Otherwise <draw> → <action>
+    return true, []string{}
 }
+
 
 /* Parse individual action and build corresponding tree nodes
  * 
@@ -404,23 +425,47 @@ fn (mut p Parser) parse_action_for_tree(mut node TreeNode) (bool, []string) {
 			node.add_child(new_node('bar'))  // Add terminal node
 			
 			// Parse first <x> coordinate
-			x1 := p.consume_x() or { return false, [p.err_expected_x()] }
+			x1 := p.consume_x() or { 
+				// Check if we're at end of input
+				if p.peek().kind == .eof {
+					return false, ["Incomplete 'bar' action - expected format: bar <x><y>,<y> (missing coordinates)"]
+				}
+				return false, [p.err_expected_x_for_action("bar")]
+			}
 			mut x_node := new_node('<x>')  // Create non-terminal
 			x_node.add_child(new_node(x1))   // Add terminal value
 			node.add_child(x_node)
 			
 			// Parse first <y> coordinate
-			y1 := p.consume_y() or { return false, [p.err_expected_y()] }
+			y1 := p.consume_y() or { 
+				// Check if we're at end of input
+				if p.peek().kind == .eof {
+					return false, ["Incomplete 'bar' action - expected format: bar <x><y>,<y> (missing y-coordinate)"]
+				}
+				return false, [p.err_expected_y_for_action("bar")]
+			}
 			mut y1_node := new_node('<y>')  // Create non-terminal
 			y1_node.add_child(new_node(y1))  // Add terminal value
 			node.add_child(y1_node)
 			
 			// Parse comma separator
-			if !p.match_kind(.comma) { return false, ["Expected ',' after ${x1}${y1}"] }
+			if !p.match_kind(.comma) { 
+				// Check if we're at end of input
+				if p.peek().kind == .eof {
+					return false, ["Incomplete 'bar' action - expected format: bar <x><y>,<y> (missing comma and second y-coordinate)"]
+				}
+				return false, ["Incomplete 'bar' action - expected comma after ${x1}${y1}"]
+			}
 			node.add_child(new_node(','))  // Add comma to tree
 			
 			// Parse second <y> coordinate
-			y2 := p.consume_y() or { return false, [p.err_expected_y()] }
+			y2 := p.consume_y() or { 
+				// Check if we're at end of input
+				if p.peek().kind == .eof {
+					return false, ["Incomplete 'bar' action - expected format: bar <x><y>,<y> (missing second y-coordinate)"]
+				}
+				return false, [p.err_expected_y_for_action("bar")]
+			}
 			mut y2_node := new_node('<y>')  // Create non-terminal
 			y2_node.add_child(new_node(y2))  // Add terminal value
 			node.add_child(y2_node)
@@ -433,27 +478,57 @@ fn (mut p Parser) parse_action_for_tree(mut node TreeNode) (bool, []string) {
 			node.add_child(new_node('line'))  // Add terminal node
 			
 			// Parse start point coordinates
-			x1 := p.consume_x() or { return false, [p.err_expected_x()] }
+			x1 := p.consume_x() or { 
+				// Check if we're at end of input
+				if p.peek().kind == .eof {
+					return false, ["Incomplete 'line' action - expected format: line <x><y>,<x><y> (missing coordinates)"]
+				}
+				return false, [p.err_expected_x_for_action("line")]
+			}
 			mut x1_node := new_node('<x>')   // Start point X
 			x1_node.add_child(new_node(x1))
 			node.add_child(x1_node)
 			
-			y1 := p.consume_y() or { return false, [p.err_expected_y()] }
+			y1 := p.consume_y() or { 
+				// Check if we're at end of input
+				if p.peek().kind == .eof {
+					return false, ["Incomplete 'line' action - expected format: line <x><y>,<x><y> (missing y-coordinate)"]
+				}
+				return false, [p.err_expected_y_for_action("line")]
+			}
 			mut y1_node := new_node('<y>')   // Start point Y
 			y1_node.add_child(new_node(y1))
 			node.add_child(y1_node)
 			
 			// Parse comma separator
-			if !p.match_kind(.comma) { return false, ["Expected ',' after ${x1}${y1}"] }
+			if !p.match_kind(.comma) { 
+				// Check if we're at end of input
+				if p.peek().kind == .eof {
+					return false, ["Incomplete 'line' action - expected format: line <x><y>,<x><y> (missing comma and end coordinates)"]
+				}
+				return false, ["Incomplete 'line' action - expected comma after ${x1}${y1}"]
+			}
 			node.add_child(new_node(','))  // Add comma to tree
 			
 			// Parse end point coordinates
-			x2 := p.consume_x() or { return false, [p.err_expected_x()] }
+			x2 := p.consume_x() or { 
+				// Check if we're at end of input
+				if p.peek().kind == .eof {
+					return false, ["Incomplete 'line' action - expected format: line <x><y>,<x><y> (missing end coordinates)"]
+				}
+				return false, [p.err_expected_x_for_action("line")]
+			}
 			mut x2_node := new_node('<x>')   // End point X
 			x2_node.add_child(new_node(x2))
 			node.add_child(x2_node)
 			
-			y2 := p.consume_y() or { return false, [p.err_expected_y()] }
+			y2 := p.consume_y() or { 
+				// Check if we're at end of input
+				if p.peek().kind == .eof {
+					return false, ["Incomplete 'line' action - expected format: line <x><y>,<x><y> (missing end y-coordinate)"]
+				}
+				return false, [p.err_expected_y_for_action("line")]
+			}
 			mut y2_node := new_node('<y>')   // End point Y
 			y2_node.add_child(new_node(y2))
 			node.add_child(y2_node)
@@ -466,12 +541,24 @@ fn (mut p Parser) parse_action_for_tree(mut node TreeNode) (bool, []string) {
 			node.add_child(new_node('fill'))  // Add terminal node
 			
 			// Parse fill point coordinates
-			x1 := p.consume_x() or { return false, [p.err_expected_x()] }
+			x1 := p.consume_x() or { 
+				// Check if we're at end of input
+				if p.peek().kind == .eof {
+					return false, ["Incomplete 'fill' action - expected format: fill <x><y> (missing coordinates)"]
+				}
+				return false, [p.err_expected_x_for_action("fill")]
+			}
 			mut x_node := new_node('<x>')    // Fill point X
 			x_node.add_child(new_node(x1))
 			node.add_child(x_node)
 			
-			y1 := p.consume_y() or { return false, [p.err_expected_y()] }
+			y1 := p.consume_y() or { 
+				// Check if we're at end of input
+				if p.peek().kind == .eof {
+					return false, ["Incomplete 'fill' action - expected format: fill <x><y> (missing y-coordinate)"]
+				}
+				return false, [p.err_expected_y_for_action("fill")]
+			}
 			mut y_node := new_node('<y>')    // Fill point Y
 			y_node.add_child(new_node(y1))
 			node.add_child(y_node)
@@ -489,7 +576,6 @@ fn (mut p Parser) parse_action_for_tree(mut node TreeNode) (bool, []string) {
 }
 
 /* Parse and consume an X coordinate variable (A-E)
- * 
  * Validates that the current token is a valid X coordinate and consumes it
  * Provides specific error messages for common mistakes */
 fn (mut p Parser) consume_x() !string {
@@ -503,7 +589,6 @@ fn (mut p Parser) consume_x() !string {
 }
 
 /* Parse and consume a Y coordinate digit (1-5)
- * 
  * Validates that the current token is a valid Y coordinate and consumes it
  * Provides specific error messages for common mistakes */
 fn (mut p Parser) consume_y() !string {
@@ -517,7 +602,6 @@ fn (mut p Parser) consume_y() !string {
 }
 
 /* Generate context-aware error message for missing X coordinate
- * 
  * Analyzes the current token to provide the most helpful error message
  * Different messages for different types of incorrect tokens */
 fn (mut p Parser) err_expected_x() string {
@@ -535,7 +619,6 @@ fn (mut p Parser) err_expected_x() string {
 }
 
 /* Generate context-aware error message for missing Y coordinate
- * 
  * Analyzes the current token to provide the most helpful error message
  * Different messages for different types of incorrect tokens */
 fn (mut p Parser) err_expected_y() string {
@@ -550,4 +633,36 @@ fn (mut p Parser) err_expected_y() string {
 	}
 	// Other invalid tokens
 	return t.lit + ' contains the unrecognized value ' + t.lit
+}
+
+/* Generate action-specific error message for missing X coordinate
+ * Provides context about which action was being parsed */
+fn (mut p Parser) err_expected_x_for_action(action_name string) string {
+	t := p.peek()
+	if t.kind == .ydigit { 
+		// Digit where letter expected
+		return "Incomplete '${action_name}' action - expected X coordinate (A-E), got '${t.lit}'"
+	}
+	if t.kind == .eof { 
+		// Unexpected end of input
+		return "Incomplete '${action_name}' action - expected X coordinate (A-E), reached end of input"
+	}
+	// Other invalid tokens
+	return "Incomplete '${action_name}' action - expected X coordinate (A-E), got '${t.lit}'"
+}
+
+/* Generate action-specific error message for missing Y coordinate
+ * Provides context about which action was being parsed */
+fn (mut p Parser) err_expected_y_for_action(action_name string) string {
+	t := p.peek()
+	if t.kind == .xletter { 
+		// Letter where digit expected
+		return "Incomplete '${action_name}' action - expected Y coordinate (1-5), got '${t.lit}'"
+	}
+	if t.kind == .eof { 
+		// Unexpected end of input
+		return "Incomplete '${action_name}' action - expected Y coordinate (1-5), reached end of input"
+	}
+	// Other invalid tokens
+	return "Incomplete '${action_name}' action - expected Y coordinate (1-5), got '${t.lit}'"
 }
