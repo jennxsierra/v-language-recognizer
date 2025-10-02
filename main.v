@@ -3,19 +3,17 @@ module main
 import os
 import src
 
-/**
- * V Language Recognizer - Main Entry Point
+/* V Language Recognizer - Main Entry Point
  * 
- * This program implements a language recognizer for a simple drawing command grammar.
- * It performs lexical analysis, parsing, and generates leftmost derivations with parse trees.
+ * This program implements a language recognizer for a simple drawing command grammar
+ * It performs lexical analysis, parsing, and generates leftmost derivations with parse trees
  * 
  * Grammar structure:
  * - <graph>   → HI <draw> BYE
  * - <draw>    → <action> | <action> ; <draw>
  * - <action>  → bar <x><y>,<y> | line <x><y>,<x><y> | fill <x><y>
  * - <x>       → A | B | C | D | E
- * - <y>       → 1 | 2 | 3 | 4 | 5
- */
+ * - <y>       → 1 | 2 | 3 | 4 | 5 */
 fn main() {
 	// Main program loop - continues until user types 'END'
 	for {
@@ -23,11 +21,18 @@ fn main() {
 		print_grammar()
 		
 		// Get user input and normalize by trimming whitespace
-		input_str := os.input('Enter a string to recognize (or type END to quit): ').trim_space()
+		input_str := os.input('Enter a string to recognize (END to quit): ').trim_space()
 		
 		// Check for exit condition (case-insensitive)
 		if input_str.to_upper() == 'END' {
-			println('\nGoodbye!\n')
+			println('\n╔══════════════════════════════════════╗')
+			println('║                                      ║')
+			println('║              GOODBYE!                ║')
+			println('║                                      ║')
+			println('║      Thank you for using the         ║')
+			println('║       V Language Recognizer!         ║')
+			println('║                                      ║')
+			println('╚══════════════════════════════════════╝\n')
 			return
 		}
 
@@ -65,43 +70,49 @@ fn main() {
 
 		// PHASE 3: SUCCESS - DISPLAY RESULTS
 		// Show the leftmost derivation steps that led to acceptance
-		println('\nLEFTMOST DERIVATION:')
+		println('\n╔══════════════════════════════════════╗')
+		println('║          LEFTMOST DERIVATION         ║')
+		println('╚══════════════════════════════════════╝')
 		formatted_derivation := src.format_derivation(derivation)
 		for s in formatted_derivation {
 			println(s)
 		}
 		
-		// Reconstruct and display the final sentence from tokens
-		final_sentence := src.tokens_to_sentence(tokens)
-		println('\nFinal generated sentence: ' + final_sentence)
-		println('\nThe string is ACCEPTED by the grammar.')
 		_ = os.input('\nPress Enter to show the parse tree...')
 
 		// PHASE 4: PARSE TREE VISUALIZATION
 		// Display the hierarchical structure of the parsed input
-		println('\nPARSE TREE:')
+		println('\n╔══════════════════════════════════════╗')
+		println('║              PARSE TREE              ║')
+		println('╚══════════════════════════════════════╝')
 		println(src.render_tree(root))
 		_ = os.input('\nPress Enter to continue...')
 	}
 }
 
-/**
- * Display the grammar rules in Backus-Naur Form (BNF)
- * 
- * Shows the formal grammar definition and provides examples of valid strings.
- * This helps users understand what input formats are acceptable.
- */
+/* Display the grammar rules in Backus-Naur Form (BNF)
+ * Shows the formal grammar definition and provides examples of valid strings
+ * This helps users understand what input formats are acceptable */
 fn print_grammar() {
-	println('\nLANGUAGE RECOGNIZER — Grammar (BNF)')
-	println('------------------------------------')
-	println('<graph>   →    HI <draw> BYE')
-	println('<draw>    →    <action>')
-	println('             | <action> ; <draw>')
-	println('<action>  →    bar <x><y>,<y>')
-	println('             | line <x><y>,<x><y>')
-	println('             | fill <x><y>')
-	println('<x>       →    A | B | C | D | E')
-	println('<y>       →    1 | 2 | 3 | 4 | 5\n')
-	println('Examples of accepted strings:')
-	println('  HI bar D2,5; fill A2; line B4,D2 BYE\n')
+	println('\n╔═══════════════════════════════════════════════════════════╗')
+	println('║                  V LANGUAGE RECOGNIZER                    ║')
+	println('║                     FOR BNF GRAMMAR                       ║')
+	println('╠═══════════════════════════════════════════════════════════╣')
+	println('║                                                           ║')
+	println('║  <graph>   →    HI <draw> BYE                             ║')
+	println('║  <draw>    →    <action>                                  ║')
+	println('║               | <action> ; <draw>                         ║')
+	println('║  <action>  →    bar <x><y>,<y>                            ║')
+	println('║               | line <x><y>,<x><y>                        ║')
+	println('║               | fill <x><y>                               ║')
+	println('║  <x>       →    A | B | C | D | E                         ║')
+	println('║  <y>       →    1 | 2 | 3 | 4 | 5                         ║')
+	println('║                                                           ║')
+	println('╠═══════════════════════════════════════════════════════════╣')
+	println('║                         EXAMPLE                           ║')
+	println('║                                                           ║')
+	println('║         ↳ HI bar D2,5; fill A2; line B4,D2 BYE            ║')
+	println('║                                                           ║')
+	println('╚═══════════════════════════════════════════════════════════╝')
+	println('')
 }
